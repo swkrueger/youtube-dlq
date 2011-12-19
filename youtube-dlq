@@ -1,0 +1,107 @@
+#!/bin/bash
+#
+#   youtube-dlq - script to queue / schedule downloading of youtube videos
+#                 using youtube-dl
+#
+#   Author: SW Krueger
+#   Last updates: 19 December 2011
+#
+#   This program is free software: you can redistribute it and/or modify
+#   it under the terms of the GNU General Public License as published by
+#   the Free Software Foundation, either version 3 of the License, or
+#   (at your option) any later version.
+#
+#   This program is distributed in the hope that it will be useful,
+#   but WITHOUT ANY WARRANTY; without even the implied warranty of
+#   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#   GNU General Public License for more details.
+#
+#   You should have received a copy of the GNU General Public License
+#   along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+
+# TODO:
+#  - Make more customizable
+
+set -e
+
+## Configuration
+# Set proxy
+#export http_proxy=http://127.0.0.1:3128/
+
+# Download dir
+#DLDIR=~/youtubedl
+DLDIR=.
+
+# Path to download queue
+#DLLIST=~/youtubedl/download.list
+DLLIST=${DLDIR}/download.list
+FLIST=${DLDIR}/finished.list
+
+# Extra options passed to youtube-dl
+# eg. OPTIONS="-s" to simulate
+OPTIONS=""
+
+# Logfile path
+LOGFILE=${DLDIR}/dllog-$(date +%Y-%m-%d)
+
+echo "youtube-dlq started at `date "+%Y/%m/%d %H:%M"`" >>${LOGFILE}
+
+# Parse queue
+if [ ! -f ${DLLIST} ]; then
+    echo "Download queue ${DLLIST} is missing." >>${LOGFILE}
+    exit 1
+fi
+if [ -f ${DLLIST} ] && [ ! -s ${DLLIST} ]; then
+    echo "Queue list ${DLLIST} is empty." >>${LOGFILE}
+    exit 1
+fi
+# Check no. of entries.
+ENTRIES=`wc -l "${DLLIST}" | awk '{print $1}'`
+echo "Entries in download queue = $ENTRIES" >>${LOGFILE}
+cd ${DLDIR}
+# Parse entries for valid URI format
+for url in `cat "${DLLIST}"`
+do
+    echo "Tackling $url" >>${LOGFILE}
+    echo "..getting filename" >>${LOGFILE}
+    FILENAME=`youtube-dl -t $OPTIONS "$url" --get-filename`
+    CODE=$?
+    if [ "$CODE" -eq "20" ] || [ "$CODE" -eq "143" ]; then
+	echo "Received SIGUSR / SIGINT!" >>${LOGFILE}
+	break;
+    elif [ "$CODE" -ne "0" ] ; then
+        echo "..failed getting filename!" >>${LOGFILE}
+	continue;
+    fi
+
+    echo "..downloading $url to $FILENAME" >>${LOGFILE}
+    youtube-dl -tc $OPTIONS "${url}" >>${LOGFILE}
+    CODE=$?
+    case "$CODE" in
+        0)
+            echo "..successfully downloaded $url to $FILENAME at `date "+%Y/%m/%d %H:%M"`" >>${LOGFILE}
+	    echo $url >>$FLIST
+            ;;
+        20)
+            echo "Received SIGUSR / SIGINT!" >>${LOGFILE}
+            break;
+            ;;
+        143)
+            echo "Received SIGUSR / SIGINT!" >>${LOGFILE}
+            break;
+            ;;
+        *)
+            echo "..failed downloading $url to $FILENAME at `date "+%Y/%m/%d %H:%M"`" >>${LOGFILE}
+	    echo ".. exit code: $CODE" >>${LOGFILE}
+            ;;
+    esac
+done
+
+echo "Cleaning download queue..." >>${LOGFILE}
+cp $DLLIST $DLLIST.bak
+grep -f $FLIST -v $DLLIST > $DLLIST
+
+echo "youtube-dlq finished at `date "+%Y/%m/%d %H:%M"`" >>${LOGFILE}
+
+exit 0

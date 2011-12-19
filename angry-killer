@@ -1,0 +1,37 @@
+#!/bin/bash
+# 
+# angry killer
+# kill all instances of youtube-dl and youtube-dlq
+
+set -e
+
+kill_process(){
+    if [ -z "$1" ]
+    then
+        echo "No process specified"
+        return 1;
+    fi
+    CMD=$1
+    SIGNAL="$2 "
+    PROGPID=`ps ax | grep "${CMD} " | grep -v grep | awk '{print $1}'`
+    while [ "$PROGPID" != "" ]; do
+        echo "Killing ${CMD} with pid ${PROGPID}."
+        kill ${SIGNAL}${PROGPID}
+        PROGPID=`ps ax | grep "${CMD} " | grep -v grep | awk '{print $1}'`
+        sleep 1
+    done
+    return 0
+}
+
+kill_process youtube-dl
+sleep 10
+kill_process youtube-dlq
+sleep 10
+
+# Make absolutely sure all processes have been killed
+kill_process youtube-dl "-9"
+sleep 10
+kill_process youtube-dlq "-9"
+sleep 10
+
+exit 0
